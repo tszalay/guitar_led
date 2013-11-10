@@ -1,13 +1,10 @@
-import hypermedia.net.*;
-
 import processing.serial.*;
 
 ColorPicker cp;
 Serial myPort;
 
-int[][] foo = new int[400][400];
-
-UDP udpserver;
+int cpSize = 400;
+int[][] foo = new int[cpSize][cpSize];
 
 byte lastbyte = 0;
 
@@ -16,20 +13,8 @@ void setup()
   size( 500, 500 );
   frameRate( 100 );
   
-  cp = new ColorPicker( 10, 10, 400, 400, 255 );
-  myPort = new Serial(this, "COM7", 115200);
-  
-  udpserver=new UDP(this, 8001);
-  udpserver.listen(true);
-}
-
-void receive (byte[] data) {
-  //.... process received data
-  // and write to output
- // if (lastbyte != -56)
-    myPort.write(data[0]);
-  println(str(data[0]));
-  lastbyte = data[0];
+  cp = new ColorPicker( 10, 10, cpSize, cpSize, color(128) );
+  //myPort = new Serial(this, "COM10", 115200);
 }
 
 void draw ()
@@ -40,13 +25,13 @@ void draw ()
 
 public class ColorPicker 
 {
-  int x, y, w, h, c;
+  int x0, y0, w, h, c;
   PImage cpImage;
   
   public ColorPicker ( int x, int y, int w, int h, int c )
   {
-    this.x = x;
-    this.y = y;
+    this.x0 = x;
+    this.y0 = y;
     this.w = w;
     this.h = h;
     this.c = c;
@@ -74,8 +59,8 @@ public class ColorPicker
     }
     
     // draw black/white.
-    drawRect( cw, 0,   30, h/2, 0xFFFFFF );
-    drawRect( cw, h/2, 30, h/2, 0 );
+    drawRect( cw, 0,   30, h/2, color(255) );
+    drawRect( cw, h/2, 30, h/2, color(0) );
     
     // draw grey scale.
     for( int j=0; j<h; j++ )
@@ -102,35 +87,34 @@ public class ColorPicker
   private void drawRect( int rx, int ry, int rw, int rh, int rc )
   {
     for(int i=rx; i<rx+rw; i++) 
-    {
       for(int j=ry; j<ry+rh; j++) 
-      {
         cpImage.set( i, j, rc );
-      }
-    }
   }
   
   public void render ()
   {
-    image( cpImage, x, y );
+    image( cpImage, x0, y0 );
+    // get mouse position relative to picker
+    int mX = mouseX-x0;
+    int mY = mouseY-y0;
+    
     if( mousePressed &&
-  mouseX >= x && 
-  mouseX < x + w &&
-  mouseY >= y &&
-  mouseY < y + h )
+        mX >= 0 && mX < w &&
+        mY >= 0 && mY < h)
     {
-      //c = get( mouseX, mouseY );
-      c = foo[mouseX-10][mouseY-10];
+      c = cpImage.get(mX, mY);
+      //c = foo[mouseX-10][mouseY-10];
       // and write to output
       byte b = 0;
       b = (byte)((c>>16)&255);
-      myPort.write(b);
+      //myPort.write(b);
       b = (byte)((c>>8)&255);
-      myPort.write(b);
+      //myPort.write(b);
       b = (byte)(c&255);
-      myPort.write(b);
+      //myPort.write(b);
     }
+    // draw the colored bottom rectangle
     fill( c );
-    rect( x, y+h+10, 20, 20 );
+    rect( x0, y0+h+10, 20, 20 );
   }
 }
