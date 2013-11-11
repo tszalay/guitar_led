@@ -1,4 +1,3 @@
-
 #include "TLC_lib.h"
 #include "pixeltypes.h"
 
@@ -68,11 +67,14 @@ void loop()
     digitalWrite(EQ_STROBE, LOW);
     delayMicroseconds(50);
     eqVals[i] = analogRead(A0);
+    Serial.print(eqVals[i],DEC);
+    Serial.print(",");
   }
+  Serial.print("0,0,0\n");
   
-  rgb[0] = eqVals[2];
-  rgb[1] = eqVals[3];
-  rgb[2] = eqVals[4];
+  rgb[0] = eqVals[2]>>4;
+  rgb[1] = eqVals[3]>>4;
+  rgb[2] = eqVals[4]>>4;
   
   if (Serial.available() > 2)
   {
