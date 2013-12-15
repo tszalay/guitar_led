@@ -7,12 +7,13 @@ int cpSize = 400;
 int lf = 10;    // Linefeed in ASCII
 
 // sensor data read from the arduino
-int nSensors = 10;
+// order: 7x EQ, 1x selector, 3x accel, 1x distance
+int nSensors = 12;
 float sensorVals[] = new float[nSensors];
 
 // buffered sensor values
-int nBuffered = 3;
-int bufLength = 100;
+int nBuffered = 4;
+int bufLength = 500;
 float sensorBuffer[][] = new float[nBuffered][bufLength];
 
 void setup() 
@@ -83,6 +84,29 @@ void drawSensors()
   drawStream(sensorBuffer[0],xstart,ystart,w,eqHeight,color(255,0,0));
   drawStream(sensorBuffer[1],xstart,ystart,w,eqHeight,color(0,255,0));
   drawStream(sensorBuffer[2],xstart,ystart,w,eqHeight,color(0,0,255));
+  
+  // shift again
+  ystart += eqHeight + 20;
+  
+  // now draw distance sensor stream
+  drawStreamBox(xstart,ystart,w,eqHeight,15);
+  drawStream(sensorBuffer[3],xstart,ystart,w,eqHeight,color(255,255,0));
+  
+  // and finally draw the selector switch
+  ystart += eqHeight + 20 + 20;
+  int xc = xstart + w/2;
+  w = 50;
+  int yc = ystart + w/2;  
+  for (int i=0; i<6; i++)
+  {
+    fill(0,60,0);
+    stroke(0);
+    
+    if (i==(int)sensorVals[7])
+      fill(0,180,0);
+      
+    triangle(xc+w*cos((i-2)*PI/3),yc+w*sin((i-2)*PI/3),xc+w*cos((i-1)*PI/3),yc+w*sin((i-1)*PI/3),xc,yc);
+  }
 }
 
 void drawStream(float data[], int x, int y, int w, int h, int c)
@@ -147,14 +171,20 @@ void readSensors()
     // make up some phony numbers
     for (int i=0; i<nSensors; i++)
     {
-      sensorVals[i] += (random(21)-10);
+      if (i != 7)
+        sensorVals[i] += (random(21)-10);
     }
+    
     for (int i=0; i<7; i++)
     {
       if (sensorVals[i] < 0) sensorVals[i] = 0;
       if (sensorVals[i] > 4095) sensorVals[i] = 4096;
-    } 
-    for (int i=7; i<nSensors; i++)
+    }
+    
+    if (random(1) < 0.01)
+      sensorVals[7] = floor(random(6));
+    
+    for (int i=8; i<nSensors; i++)
     {
       if (sensorVals[i] < -2048) sensorVals[i] = -2048;
       if (sensorVals[i] > 2047) sensorVals[i] = 2047;
@@ -165,7 +195,7 @@ void readSensors()
   for (int i=0; i<nBuffered; i++)
   {
     arrayCopy(sensorBuffer[i], 1, sensorBuffer[i], 0, bufLength-1);
-   sensorBuffer[i][bufLength-1] = sensorVals[i+7];  
+    sensorBuffer[i][bufLength-1] = sensorVals[i+8];  
   }
 }
 

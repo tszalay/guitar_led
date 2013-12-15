@@ -6,8 +6,16 @@ uint16_t RGBs[60];
 
 int mode=2;
 
+// digital pins for MSGEQ7 chip
+// analog in is on A0
 const int EQ_RST    = 6;
 const int EQ_STROBE = 7;
+
+// stored sensor vals, scaled as appropriate
+uint16_t eqVals[7];
+uint16_t accelVals[3];
+uint16_t distVal = 0;
+uint16_t swVal = 0;
 
 #define SERIAL_EN 1
 
@@ -19,20 +27,11 @@ void setup()
   for (int i=0; i<20; i++)
     hues[i] = random16(360);
       
-//  delay(2000);
 #ifdef SERIAL_EN
   Serial.begin(115200);
 #endif
-  /*for (int i=0; i<256; i++)
-  {
-    Serial.print(i,DEC);
-    Serial.print(" ");
-    Serial.print(vals[i] >> 8,HEX);
-    Serial.print("  ");
-    Serial.println(vals[i]&255,HEX);
-  }*/
   
-  // pulse reset pin of MSGEQ7
+  // pulse reset pin of MSGEQ7 to initialize
   pinMode(EQ_RST, OUTPUT);
   pinMode(EQ_STROBE, OUTPUT);
   pinMode(A0, INPUT);
@@ -42,41 +41,53 @@ void setup()
   delay(50);
 }
 
-
-void loop()
+// get EQ vals from MSGEQ7
+void readEQ()
 {
-  static uint16_t rgb[3];
-  
-  // read MSGEQ7 chip
-  // strobe reset first
-/*  digitalWrite(EQ_RST, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(EQ_RST, LOW);
-  delayMicroseconds(100);*/
-  // and then read middle three channels
-  int eqVals[7];
-  
   for (int i=0; i<7; i++)
   {
+    // first strobe, then read out, no need to hit reset it looks like
     digitalWrite(EQ_STROBE, HIGH);
     delayMicroseconds(50);
     digitalWrite(EQ_STROBE, LOW);
     delayMicroseconds(50);
     eqVals[i] = analogRead(A0);
-#ifdef SERIAL_EN    
+  }
+}
+
+
+
+void loop()
+{
+  static uint16_t rgb[3];
+  
+  // read the sensors
+  readEQ();
+   
+#ifdef SERIAL_EN
+  // transmit sensor data
+  // order is EQ, sel, accel, distance
+  for (int i=0; i<7; i++)
+  {
     Serial.print(eqVals[i],DEC);
     Serial.print(",");
-#endif
   }
-#ifdef SERIAL_EN
-  Serial.print("0,0,0\n");
+  Serial.print(swVal,DEC);
+  Serial.print(",");
+  for (int i=0; i<3; i++)
+  {
+    Serial.print(accelVals[i],DEC);
+    Serial.print(",");
+  }
+  Serial.println(distVal,DEC);
 #endif
   
   rgb[0] = eqVals[1]>>4;
   rgb[1] = eqVals[2]>>4;
   rgb[2] = eqVals[3]>>4;
 
-#ifdef SERIAL_EN  
+#ifdef SERIAL_EN
+  // check if we received bytes to set the color/brightness
   if (Serial.available() > 2)
   {
     mode = 2;
