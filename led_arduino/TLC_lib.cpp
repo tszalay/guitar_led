@@ -20,7 +20,7 @@ __asm volatile ("nop");
 // write is 25h = 100101
 // stop clock for 8x last clock period
 
-
+// standard header as defined above
 byte TLC_header[4] = 
                {  B10010100,  
                   B01011111, 
@@ -47,7 +47,7 @@ byte TLC_dim = 0;
 
 
 
-// utitility function funnction for swapping the bytes of a var or an array i'm tired ok?
+// utitility function funnction for swapping the byte order of a var or an array i'm tired ok?
 __attribute__((always_inline)) inline static uint16_t flipBytes(uint16_t val)
 {
   return ((uint16_t)lowByte(val) << 8) | highByte(val);
@@ -82,7 +82,7 @@ void TLC_init(byte dimming)
   }
 }
 
-void TLC_setAll_16(uint16_t R, uint16_t G, uint16_t B)
+void TLC_setAll(uint16_t R, uint16_t G, uint16_t B)
 {
   uint16_t *msg16 = (uint16_t*)TLC_msg;
  
@@ -98,55 +98,6 @@ void TLC_setAll_16(uint16_t R, uint16_t G, uint16_t B)
       msg16[i*14 + 3*j + 2] = B;
       msg16[i*14 + 3*j + 3] = G;
       msg16[i*14 + 3*j + 4] = R;
-    }
-  }
-}
-
-
-// set data for each LED individually, in format R..G..B
-void TLC_setData(uint8_t* data)
-{
-  // we know that each chip has 4 RGB LEDs, except for the middle two (out of 6)
-  // this means there are 4*4 + 2*2 = 20 LEDs total
-  
-  // so set all of them, but skip a few
-  for (int i=0; i<6; i++)
-  {
-    for (int j=0; j<4; j++)
-    {
-      if (i>1 && i<4 && j<2)
-        continue;
-        
-      TLC_msg[i*28 + 6*j + 4] = *data++ >> TLC_dim;
-      TLC_msg[i*28 + 6*j + 5] = 0;
-      TLC_msg[i*28 + 6*j + 6] = *data++ >> TLC_dim;
-      TLC_msg[i*28 + 6*j + 7] = 0;
-      TLC_msg[i*28 + 6*j + 8] = *data++ >> TLC_dim;
-      TLC_msg[i*28 + 6*j + 9] = 0;
-    }
-  }  
-}
-
-// set LED data, using the provided length-256 lookup table
-void TLC_setData(uint8_t *data, uint16_t *vals)
-{
-  // we know that each chip has 4 RGB LEDs, except for the middle two (out of 6)
-  // this means there are 4*4 + 2*2 = 20 LEDs total
-
-  // write into a 16-bit array, for convenience  
-  uint16_t *msg16 = (uint16_t*)TLC_msg;
-  
-  // so set all of them, but skip a few
-  for (int i=0; i<6; i++)
-  {
-    for (int j=0; j<4; j++)
-    {
-      if (i>1 && i<4 && j<2)
-        continue;
-        
-      msg16[i*14 + 3*j + 2] = flipBytes(vals[*data++] >> TLC_dim);
-      msg16[i*14 + 3*j + 3] = flipBytes(vals[*data++] >> TLC_dim);
-      msg16[i*14 + 3*j + 4] = flipBytes(vals[*data++] >> TLC_dim);
     }
   }
 }

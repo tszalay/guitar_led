@@ -3,7 +3,6 @@
 
 uint16_t hues[20];
 uint16_t RGBs[60];
-uint16_t vals[256];
 
 int mode=2;
 
@@ -19,16 +18,7 @@ void setup()
   
   for (int i=0; i<20; i++)
     hues[i] = random16(360);
-  
-  //float gamma = 2;
-    
-  for (int i=0; i<256; i++)
-  {
-    vals[i] = i;
-    vals[i] *= i;
-    //float f = i/255.0f;
-    //vals[i] = (uint16_t)(65535*pow(f,gamma));
-  }
+      
 //  delay(2000);
 #ifdef SERIAL_EN
   Serial.begin(115200);
@@ -90,9 +80,14 @@ void loop()
   if (Serial.available() > 2)
   {
     mode = 2;
+    // get all of the rgb values
     rgb[0] = Serial.read();
     rgb[1] = Serial.read();
     rgb[2] = Serial.read();
+    // and scale them for gamma 2
+    for (int i=0; i<2; i++)
+      rgb[i] *= rgb[i];
+    // flush buffer
     while (Serial.available() > 0)
       Serial.read();
   }
@@ -113,7 +108,7 @@ void loop()
       break;
       
     case 2:
-      TLC_setAll_16(vals[rgb[0]],vals[rgb[1]],vals[rgb[2]]);
+      TLC_setAll(rgb[0],rgb[1],rgb[2]);
       break;
   }
 
