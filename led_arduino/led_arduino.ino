@@ -1,5 +1,5 @@
 #include "TLC_lib.h"
-#include "pixeltypes.h"
+#include "lib8tion.h"
 
 uint16_t hues[20];
 uint16_t RGBs[60];
@@ -10,6 +10,8 @@ int mode=2;
 const int EQ_RST    = 6;
 const int EQ_STROBE = 7;
 
+#define SERIAL_EN 1
+
 void setup() 
 {
   // initialize with specified dim scale (in this case, 1/8th power)
@@ -18,15 +20,19 @@ void setup()
   for (int i=0; i<20; i++)
     hues[i] = random16(360);
   
-  float gamma = 2;
+  //float gamma = 2;
     
   for (int i=0; i<256; i++)
   {
-    float f = i/255.0f;
-    vals[i] = (uint16_t)(65535*pow(f,gamma));
+    vals[i] = i;
+    vals[i] *= i;
+    //float f = i/255.0f;
+    //vals[i] = (uint16_t)(65535*pow(f,gamma));
   }
 //  delay(2000);
+#ifdef SERIAL_EN
   Serial.begin(115200);
+#endif
   /*for (int i=0; i<256; i++)
   {
     Serial.print(i,DEC);
@@ -67,15 +73,20 @@ void loop()
     digitalWrite(EQ_STROBE, LOW);
     delayMicroseconds(50);
     eqVals[i] = analogRead(A0);
+#ifdef SERIAL_EN    
     Serial.print(eqVals[i],DEC);
     Serial.print(",");
+#endif
   }
+#ifdef SERIAL_EN
   Serial.print("0,0,0\n");
+#endif
   
-  rgb[0] = eqVals[2]>>4;
-  rgb[1] = eqVals[3]>>4;
-  rgb[2] = eqVals[4]>>4;
-  
+  rgb[0] = eqVals[1]>>4;
+  rgb[1] = eqVals[2]>>4;
+  rgb[2] = eqVals[3]>>4;
+
+#ifdef SERIAL_EN  
   if (Serial.available() > 2)
   {
     mode = 2;
@@ -85,7 +96,8 @@ void loop()
     while (Serial.available() > 0)
       Serial.read();
   }
-  
+#endif
+
   switch (mode)
   {
     case 0:
@@ -95,20 +107,9 @@ void loop()
         if (hues[i] >= 360)
           hues[i] = 0;
           
-//        HslToRgb(hues[i], 255, 255, RGBs + 3*i);
-          HSVtoRGB(hues[i], 255, 255, RGBs+3*i);
+        HSVtoRGB(hues[i], 255, 255, RGBs+3*i);
       }
       TLC_setData(RGBs);
-      break;
-      
-    case 1:
-      static byte zap=30;
-      zap++;
-      
-//      if (zap > 50) zap = 30;
-
-      TLC_setAll_16(vals[zap],vals[zap],vals[zap]);
-      
       break;
       
     case 2:
