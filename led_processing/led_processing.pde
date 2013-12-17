@@ -67,7 +67,7 @@ void drawSensors()
     rect( xstart+eqSpc*i, ystart, eqWid, eqHeight/7 );
     
     fill(color(0,60,0));
-    rect( xstart+eqSpc*i, ystart, eqWid, (4095.0-sensorVals[i])*(eqHeight/4095.0) );
+    rect( xstart+eqSpc*i, ystart, eqWid, (65535.0-sensorVals[i])*(eqHeight/65535.0) );
     
     stroke(color(0));
     noFill();
@@ -119,8 +119,8 @@ void drawStream(float data[], int x, int y, int w, int h, int c)
   {
     float x0 = map(i, 0, n-1, x, x+w);
     float x1 = map(i+1, 0, n-1, x, x+w);
-    float y0 = map(data[i],-2048,2047,y+h,y);
-    float y1 = map(data[i+1],-2048,2047,y+h,y);
+    float y0 = map(data[i],-32768,32767,y+h,y);
+    float y1 = map(data[i+1],-32768,32767,y+h,y);
     line(x0,y0,x1,y1);
   }
 }
@@ -156,6 +156,7 @@ void readSensors()
       if (buf == null)
         break;
       String myString = new String(buf);
+      println(myString);
       // split and parse, save in our array
       if (myString != null)
       {
