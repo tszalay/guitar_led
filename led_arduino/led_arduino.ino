@@ -115,6 +115,15 @@ void readSwitch()
   swVal = (val + 100)/205;
 }
 
+void readDistance()
+{
+  // val here is likely under 3.5V, or 716 (10-bit)
+  uint32_t val = (65535*100)/(1+analogRead(A4));
+  if (val > 65535) val = 65535;
+  // scale to 1...65535
+  distVal = val;
+}
+
 
 void loop()
 {
@@ -124,6 +133,7 @@ void loop()
   readEQ();
   readAccel();
   readSwitch();
+  readDistance();
    
 #ifdef SERIAL_EN
   // transmit sensor data

@@ -81,16 +81,16 @@ void drawSensors()
   // first draw the background box
   drawStreamBox(xstart,ystart,w,eqHeight,15);
   // and then the streams
-  drawStream(sensorBuffer[0],xstart,ystart,w,eqHeight,color(255,0,0));
-  drawStream(sensorBuffer[1],xstart,ystart,w,eqHeight,color(0,255,0));
-  drawStream(sensorBuffer[2],xstart,ystart,w,eqHeight,color(0,0,255));
+  drawStream(sensorBuffer[0],xstart,ystart,w,eqHeight,color(255,0,0),true);
+  drawStream(sensorBuffer[1],xstart,ystart,w,eqHeight,color(0,255,0),true);
+  drawStream(sensorBuffer[2],xstart,ystart,w,eqHeight,color(0,0,255),true);
   
   // shift again
   ystart += eqHeight + 20;
   
   // now draw distance sensor stream
   drawStreamBox(xstart,ystart,w,eqHeight,15);
-  drawStream(sensorBuffer[3],xstart,ystart,w,eqHeight,color(255,255,0));
+  drawStream(sensorBuffer[3],xstart,ystart,w,eqHeight,color(255,255,0),false);
   
   // and finally draw the selector switch
   ystart += eqHeight + 20 + 20;
@@ -109,7 +109,7 @@ void drawSensors()
   }
 }
 
-void drawStream(float data[], int x, int y, int w, int h, int c)
+void drawStream(float data[], int x, int y, int w, int h, int c, boolean signed)
 {
   int n = data.length;
   
@@ -119,9 +119,18 @@ void drawStream(float data[], int x, int y, int w, int h, int c)
   {
     float x0 = map(i, 0, n-1, x, x+w);
     float x1 = map(i+1, 0, n-1, x, x+w);
-    float y0 = map(data[i],-32768,32767,y+h,y);
-    float y1 = map(data[i+1],-32768,32767,y+h,y);
-    line(x0,y0,x1,y1);
+    if (signed)
+    {
+      float y0 = map(data[i],-32768,32767,y+h,y);
+      float y1 = map(data[i+1],-32768,32767,y+h,y);
+      line(x0,y0,x1,y1);
+    }
+    else
+    {
+      float y0 = map(data[i],0,65535,y+h,y);
+      float y1 = map(data[i+1],0,65535,y+h,y);
+      line(x0,y0,x1,y1);
+    }
   }
 }
 
