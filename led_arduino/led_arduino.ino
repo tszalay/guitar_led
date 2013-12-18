@@ -129,12 +129,12 @@ void loop()
 {
   static uint16_t rgb[3];
   
-  // read the sensors
+  // read the sensors, takes about 2 ms
   readEQ();
   readAccel();
   readSwitch();
   readDistance();
-   
+  
 #ifdef SERIAL_EN
   // transmit sensor data
   // order is EQ, sel, accel, distance
