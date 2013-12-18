@@ -101,12 +101,18 @@ void readEQ()
 
 void readAccel()
 {
-    // read all three axis in burst to ensure all measurements correspond to same sample time
-    adxl.readXYZTData(XValue, YValue, ZValue, Temperature);
-    // it's 12 bits, so multiply by the missing 4 bits = 16
-    accelVals[0] = XValue*16;
-    accelVals[1] = YValue*16;
-    accelVals[2] = ZValue*16;
+  // read all three axis in burst to ensure all measurements correspond to same sample time
+  adxl.readXYZTData(XValue, YValue, ZValue, Temperature);
+  // it's 12 bits, so multiply by the missing 4 bits = 16
+  accelVals[0] = XValue*16;
+  accelVals[1] = YValue*16;
+  accelVals[2] = ZValue*16;
+}
+
+void readSwitch()
+{
+  int val = analogRead(A1);
+  swVal = (val + 100)/205;
 }
 
 
@@ -117,6 +123,7 @@ void loop()
   // read the sensors
   readEQ();
   readAccel();
+  readSwitch();
    
 #ifdef SERIAL_EN
   // transmit sensor data

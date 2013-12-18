@@ -156,7 +156,7 @@ void readSensors()
       if (buf == null)
         break;
       String myString = new String(buf);
-      println(myString);
+      print(myString);
       // split and parse, save in our array
       if (myString != null)
       {
