@@ -4,11 +4,10 @@
 #include <SPI.h>
 #include <ADXL362.h>
 
-
-uint16_t hues[20];
-uint16_t RGBs[60];
-
-int mode=2;
+// update period, in ms
+const uint16_t loopTime = 20;
+// and frequency
+const uint16_t loopFreq = 1000/loopTime;
 
 // ADXL values
 ADXL362 adxl;
@@ -33,13 +32,66 @@ int16_t accelVals[3];     // full range
 uint16_t distVal = 0;     // full range
 uint16_t swVal = 0;       // 0...5
 
+// debouncing for the switch
+uint16_t newSwVal     = 0;
+uint16_t newSwTime    = 0;
+const uint16_t dbTime = 200; // ms to wait on new value
+
 // computed values
 uint16_t curPower;        // sum of EQ spectra, full range
-uint16_t avgPower;        // time-average of previous
-const uint8_t pwrTau = 65000; // mixing fraction for averaging, in 255ths
+uint16_t avgPower;        // time-average (lowpass filter of previous
+const uint16_t pwrTau = 65000; // mixing fraction for averaging
+
+// slow fading for mode switching
+// gonna get here eventually
 
 
+
+// computed counters and whatnot
+// everything is full-range unless stated otherwise
+
+// this is an array of random phases to use for dispersion
+uint16_t* randPhase = new uint16_t[20];
+
+// here be parameters/magic numbers (for corresponding mode):
+const uint16_t m1_slowTime = 120; // time to loop hue, in seconds
+const uint8_t  m1_dispMag  = 10;  // magnitude of dispersion, in 255ths (sorry!)
+const uint8_t  m1_brt      = 50;  // brightness of the mode
+const uint16_t m1_dHue = (65535/m1_slowTime/loopFreq); // amount to add each iteration
+const uint16_t m1_dDisp    = 5*m1_dHue;  // how much faster dispersion changes
+
+const uint16_t m2_pwrScale = 100; // scaling for power
+
+const uint16_t m3_pwrScale = 100;   // scaling for power to fade btwn LEDs
+uint8_t        m3_curTgt   = 0;     // which LED is fading
+uint8_t        m3_nextTgt  = 10;    // which LED is brightening
+uint16_t       m3_curHue   = 0;     // hue of current LED
+uint16_t       m3_nextHue  = 20000; // hue of next LED
+uint16_t       m3_fadeFac  = -1;    // fraction faded to next LED
+
+uint16_t       m4_bright   = 0;     // current brightness of flashing
+const uint16_t m4_decay    = 65000; // decay rate for flashy flash
+const uint16_t m4_thresh   = 10000; // minimum value for power to make brighty
+
+const uint16_t m5_hues[]   = {0, 5000, 10000, 15000, 20000};
+uint16_t       m5_dthresh  = 10000;
+
+
+
+// overall hue of the guitar. everybody must update, for smooth transitionssss
+uint16_t avgHue    = 0;
+// loop variable to use for dispersion
+uint16_t dispVal   = 0;
+
+// temporary output vars for hues and RGB values of LEDs
+uint16_t hues[20];
+uint16_t RGBs[60];
+
+
+
+// are we transmitting data over serial?
 #define SERIAL_EN 1
+
 
 void setup() 
 {
@@ -51,9 +103,8 @@ void setup()
   adxl.beginMeasure();            // Switch ADXL362 to measure mode  
   adxl.checkAllControlRegs();     // Burst Read all Control Registers, to check for proper setup
 
-  
   for (int i=0; i<20; i++)
-    hues[i] = random16(360);
+    randPhase[i] = random16();
     
   // initialize all non-instantaneous values
   avgPower = 0;
@@ -112,29 +163,50 @@ void readAccel()
 void readSwitch()
 {
   int val = analogRead(A1);
-  swVal = (val + 100)/205;
+  // calculate from 6-way voltage divider (5 resistors)
+  int curSwitch = (val + 100)/205;
+  // adding a quick little debounce thing here
+  if (curSwitch == swVal)
+  {
+    // no change, do nothing
+    return;
+  }
+  else if (curSwitch == newSwVal)
+  {
+    // still on new value, debouncing
+    newSwTime += loopTime;
+    // done debouncing?
+    if (newSwTime > dbTime)
+    {
+      // update main switch value
+      swVal = newSwVal;
+    }
+  }
+  else
+  {
+    // start debouncing
+    newSwTime = 0;
+    newSwVal = curSwitch;
+  }
 }
 
+// read sharp distance sensor
 void readDistance()
 {
   // val here is likely under 3.5V, or 716 (10-bit)
+  // add 1 to avoid divide by zero
+  // otherwise, sensor reports inverse distance
+  // this scaling gives a pretty good range
+  // and also keeps it from overflowing
   uint32_t val = (65535*100)/(1+analogRead(A4));
   if (val > 65535) val = 65535;
-  // scale to 1...65535
+  // scale to 0...65535
   distVal = val;
 }
 
-
-void loop()
+// transmit sensor data, if we so desire
+void sendSensors()
 {
-  static uint16_t rgb[3];
-  
-  // read the sensors, takes about 2 ms
-  readEQ();
-  readAccel();
-  readSwitch();
-  readDistance();
-  
 #ifdef SERIAL_EN
   // transmit sensor data
   // order is EQ, sel, accel, distance
@@ -152,12 +224,164 @@ void loop()
   }
   Serial.println(distVal,DEC);
 #endif
-  
-  rgb[0] = eqVals[1]>>4;
-  rgb[1] = eqVals[2]>>4;
-  rgb[2] = eqVals[3]>>4;
+}
 
-#ifdef SERIAL_EN
+
+// set and disperse all hues, by the given phase and magnitude (out of 255)
+void disperseHues(uint16_t hue, uint16_t phase, uint8_t mag)
+{
+  // assumes the hues array is populated, this modifies by disps
+  for (int i=0; i<20; i++)
+    hues[i] = hue + scale16by8(sin16(phase+randPhase[i]),mag);
+}
+
+// disperse all hues, by the given phase and magnitude (out of 255)
+void disperseHues(uint16_t phase, uint8_t mag)
+{
+  // assumes the hues array is populated, this modifies by disps
+  for (int i=0; i<20; i++)
+    hues[i] += scale16by8(sin16(phase+randPhase[i]),mag);
+}
+
+// convert preset H values to RGB with SV
+void huesToRGB(uint8_t sat, uint8_t val)
+{
+  for (int i=0; i<20; i++)
+    HSVtoRGB(scale16(hues[i],360), sat, val, RGBs+3*i);
+}
+
+void calcModes()
+{
+  switch (swVal)
+  {
+    case 0:
+    {
+      // all LEDs off
+      for (int i=0; i<60; i++)
+        RGBs[i] = 0;
+        
+      TLC_setAll(0,0,0);
+      break;
+    }
+    case 1:
+    {
+      // standard slow fade, minimal dispersion
+      avgHue += m1_dHue;
+      // add dispersion fade, faster than hue fade
+      dispVal += m1_dDisp;
+      // disperse the hues
+      disperseHues(avgHue, dispVal, m1_dispMag);
+      huesToRGB(255, m1_brt);
+      
+      TLC_setData(RGBs);
+      break;
+    }
+    case 2:
+    {
+      // Fade rate modulated by power
+      uint16_t pwr = scale16by8(avgPower, m2_pwrScale);
+      avgHue += pwr;
+      // add dispersion fade, faster than hue fade
+      dispVal += 5*pwr;
+
+      // disperse the hues
+      disperseHues(avgHue, dispVal, m1_dispMag);
+      huesToRGB(255, m1_brt);
+
+      TLC_setData(RGBs);
+      break;
+    }
+    case 3:
+    {
+      // Jumping lights, from one region to another
+      uint16_t pwr = scale16by8(avgPower, m3_pwrScale);
+      m3_fadeFac += pwr;
+      // did we just wrap around?
+      if (m3_fadeFac < pwr)
+      {
+        // cycle current and next onesies, and pick randomly
+        m3_curTgt = m3_nextTgt;
+        m3_curHue = m3_nextHue;
+        m3_nextTgt = random8(20);
+        m3_nextHue = random16();
+        // also start at 0
+        m3_fadeFac = 0;
+      }
+      // set all dem RGBs to 0, in case of previous thingies
+      memset(RGBs,0,2*60);
+      // now set jumping LEDs
+      HSVtoRGB(scale16(m3_curHue,360), 255, m3_fadeFac>>8, RGBs+3*m3_curTgt);
+      HSVtoRGB(scale16(m3_nextHue,360), 255, (-m3_fadeFac)>>8, RGBs+3*m3_nextTgt);
+      
+      TLC_setData(RGBs);
+      break;
+    }
+    case 4:
+    {
+      // Sound blaster! Flash white on big'n events
+      if (avgPower > m4_thresh)
+        m4_bright = avgPower;
+      else
+        m4_bright = scale16(avgPower, m4_decay);
+
+      // move dispersion along
+      dispVal += m1_dDisp;
+      
+      // run the full gamut of hues for this dispersion
+      disperseHues(0, dispVal, 255);
+      
+      // but when we set the RGBs we use the sat
+      huesToRGB(127-(m4_bright >> 9), m4_bright >> 8);
+
+      TLC_setData(RGBs);
+      break;
+    }
+    case 5:
+    {
+      // Guitar on fire mode
+      
+      dispVal += m1_dDisp;
+      
+      // set hue based on distance and avg. power
+      // interpolate and blah blah blah
+      uint16_t pwr = (distVal>>1) + (avgPower>>1);
+      uint8_t pind = pwr >> 14; // 0...3, use ind
+      uint16_t hue = lerp16by16(m5_hues[pind], m5_hues[pind], pwr & ((1<<14)-1));
+      // adjust intensity as well
+      uint8_t brt = 0;
+      if (distVal > m5_dthresh)
+        brt = pwr >> 9 + 128;
+  
+      disperseHues(hue, dispVal, brt>>4);
+      huesToRGB(255, brt);
+      
+      TLC_setData(RGBs);
+      break;
+    }
+  }
+}
+
+
+
+
+void loop()
+{
+  // start of calculations and stuff, in us
+  uint32_t tstart = micros();
+  
+  // read the sensors, takes about 2 ms
+  readEQ();
+  readAccel();
+  readSwitch();
+  readDistance();
+  
+  // also takes 1 ms or something like that
+  sendSensors();
+
+  // can put lots of calculations here then, if you want
+  calcModes();
+  
+/*#ifdef SERIAL_EN
   // check if we received bytes to set the color/brightness
   if (Serial.available() > 2)
   {
@@ -173,27 +397,15 @@ void loop()
     while (Serial.available() > 0)
       Serial.read();
   }
-#endif
+#endif*/
 
-  switch (mode)
-  {
-    case 0:
-      for (int i=0; i<20; i++)
-      {
-        hues[i]++;
-        if (hues[i] >= 360)
-          hues[i] = 0;
-          
-        HSVtoRGB(hues[i], 255, 255, RGBs+3*i);
-      }
-      TLC_setData(RGBs);
-      break;
-      
-    case 2:
-      TLC_setAll(rgb[0],rgb[1],rgb[2]);
-      break;
-  }
-
+  // and finally, write the newest data to the LED drivers
+  // (takes about 1.5 ms)
   TLC_write();
-  delay(20);
+  
+  // and total time taken
+  uint32_t dt = micros() - tstart;
+  // make up the rest of the time with a delay, if needed (?)
+  if (1000*loopTime > dt)
+    delayMicroseconds(1000*loopTime - dt);
 }
