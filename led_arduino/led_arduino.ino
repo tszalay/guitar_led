@@ -11,9 +11,6 @@ const uint16_t loopFreq = 1000/loopTime;
 
 // ADXL values
 ADXL362 adxl;
-int temp;
-int XValue, YValue, ZValue, Temperature;
-
 
 
 // digital pins for MSGEQ7 chip
@@ -96,7 +93,7 @@ uint16_t RGBs[60];
 void setup() 
 {
   // initialize with specified dim scale (in this case, 1/8th power)
-  TLC_init(3);
+  TLC_init(2);
   
   // initalize axdl
   adxl.begin();                   // Setup SPI protocol, issue device soft reset
@@ -152,12 +149,13 @@ void readEQ()
 
 void readAccel()
 {
+  int x,y,z,t;
   // read all three axis in burst to ensure all measurements correspond to same sample time
-  adxl.readXYZTData(XValue, YValue, ZValue, Temperature);
+  adxl.readXYZTData(x, y, z, t);
   // it's 12 bits, so multiply by the missing 4 bits = 16
-  accelVals[0] = XValue*16;
-  accelVals[1] = YValue*16;
-  accelVals[2] = ZValue*16;
+  accelVals[0] = x*16;
+  accelVals[1] = y*16;
+  accelVals[2] = t*16;
 }
 
 void readSwitch()
@@ -252,6 +250,7 @@ void huesToRGB(uint8_t sat, uint8_t val)
 
 void calcModes()
 {
+  swVal = 2;
   switch (swVal)
   {
     case 0:
@@ -408,4 +407,5 @@ void loop()
   // make up the rest of the time with a delay, if needed (?)
   if (1000*loopTime > dt)
     delayMicroseconds(1000*loopTime - dt);
+//  delay(50);
 }

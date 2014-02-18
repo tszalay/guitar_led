@@ -84,20 +84,28 @@ void TLC_init(byte dimming)
 
 void TLC_setAll(uint16_t R, uint16_t G, uint16_t B)
 {
-  uint16_t *msg16 = (uint16_t*)TLC_msg;
- 
   // flip endianness of R, G, B cuz arduino
   R = flipBytes(R >> TLC_dim);
   G = flipBytes(G >> TLC_dim);
   B = flipBytes(B >> TLC_dim);  
   
-  for (int i=0; i<TLC_NDEV; i++)
+  // we know that each chip has 4 RGB LEDs, except for the middle two (out of 6)
+  // this means there are 4*4 + 2*2 = 20 LEDs total
+
+  // write into a 16-bit array, for convenience  
+  uint16_t *msg16 = (uint16_t*)TLC_msg;
+  
+  // so set all of them, but skip a few
+  for (int i=0; i<6; i++)
   {
     for (int j=0; j<4; j++)
     {
-      msg16[i*14 + 3*j + 2] = B;
-      msg16[i*14 + 3*j + 3] = G;
-      msg16[i*14 + 3*j + 4] = R;
+      if (i>1 && i<4 && j<2)
+        continue;
+        
+      msg16[i*14 + 3*j + 2] = flipBytes(R >> TLC_dim);
+      msg16[i*14 + 3*j + 3] = flipBytes(G >> TLC_dim);
+      msg16[i*14 + 3*j + 4] = flipBytes(B >> TLC_dim);
     }
   }
 }

@@ -25,7 +25,7 @@ void setup()
   
   try {
     // attempt to connect, and sync input
-    myPort = new Serial(this, "COM10", 115200);
+    myPort = new Serial(this, "COM4", 115200);
     myPort.readBytesUntil(lf);
   }
   catch (Exception e) {
