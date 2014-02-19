@@ -411,5 +411,5 @@ void loop()
   // make up the rest of the time with a delay, if needed (?)
 //  if (1000*loopTime > dt)
 //    delayMicroseconds(1000*loopTime - dt);
-  delay(50);
+  delay(30);
 }
