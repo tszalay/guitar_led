@@ -36,8 +36,8 @@ const uint16_t dbTime = 200; // ms to wait on new value
 
 // computed values
 uint16_t curPower;        // sum of EQ spectra, full range
-uint16_t avgPower;        // time-average (lowpass filter of previous
-const uint16_t pwrTau = 65000; // mixing fraction for averaging
+uint16_t avgPower;        // time-average (lowpass filter of previous)
+const uint16_t pwrTau = 63000; // mixing fraction for averaging
 
 // slow fading for mode switching
 // gonna get here eventually
@@ -48,18 +48,20 @@ const uint16_t pwrTau = 65000; // mixing fraction for averaging
 // everything is full-range unless stated otherwise
 
 // this is an array of random phases to use for dispersion
-uint16_t* randPhase = new uint16_t[20];
+//uint16_t* randPhase = new uint16_t[20];
+uint16_t randPhase[20];
 
 // here be parameters/magic numbers (for corresponding mode):
-const uint16_t m1_slowTime = 120; // time to loop hue, in seconds
-const uint8_t  m1_dispMag  = 10;  // magnitude of dispersion, in 255ths (sorry!)
+const uint16_t m1_slowTime = 5;  // time to loop hue, in seconds
+const uint8_t  m1_dispMag  = 100;  // magnitude of dispersion, in 255ths (sorry!)
 const uint8_t  m1_brt      = 50;  // brightness of the mode
-const uint16_t m1_dHue = (65535/m1_slowTime/loopFreq); // amount to add each iteration
-const uint16_t m1_dDisp    = 5*m1_dHue;  // how much faster dispersion changes
+const uint16_t m1_dHue = (65535/m1_slowTime/loopFreq); // amount to add each iteration, is about 21
+const uint16_t m1_dDisp    = 5*m1_dHue;  // rate at which dispersion changes
 
-const uint16_t m2_pwrScale = 100; // scaling for power
+const uint16_t m2_pwrScale  = 1200; // scaling for power
+const uint8_t  m2_dispScale = 2;    // how much faster dispersion changes than power
 
-const uint16_t m3_pwrScale = 100;   // scaling for power to fade btwn LEDs
+const uint16_t m3_pwrScale = 1200;   // scaling for power to fade btwn LEDs
 uint8_t        m3_curTgt   = 0;     // which LED is fading
 uint8_t        m3_nextTgt  = 10;    // which LED is brightening
 uint16_t       m3_curHue   = 0;     // hue of current LED
@@ -100,8 +102,9 @@ void setup()
   adxl.beginMeasure();            // Switch ADXL362 to measure mode  
   adxl.checkAllControlRegs();     // Burst Read all Control Registers, to check for proper setup
 
+  randomSeed(analogRead(4));
   for (int i=0; i<20; i++)
-    randPhase[i] = random16();
+    randPhase[i] = random(65535);
     
   // initialize all non-instantaneous values
   avgPower = 0;
@@ -220,7 +223,10 @@ void sendSensors()
     Serial.print(accelVals[i],DEC);
     Serial.print(",");
   }
-  Serial.println(distVal,DEC);
+  Serial.print(distVal,DEC);
+  // now print power and other relevant vars
+  Serial.print(",");
+  Serial.println(avgPower,DEC);
 #endif
 }
 
@@ -230,15 +236,19 @@ void disperseHues(uint16_t hue, uint16_t phase, uint8_t mag)
 {
   // assumes the hues array is populated, this modifies by disps
   for (int i=0; i<20; i++)
-    hues[i] = hue + scale16by8(sin16(phase+randPhase[i]),mag);
+  {
+    int16_t sval = sin16(phase+randPhase[i]);
+    if (sval > 0)
+      hues[i] = hue + scale16(abs(sval),20000U);
+    else
+      hues[i] = hue - scale16(abs(sval),20000U);
+  }
 }
 
 // disperse all hues, by the given phase and magnitude (out of 255)
 void disperseHues(uint16_t phase, uint8_t mag)
 {
-  // assumes the hues array is populated, this modifies by disps
-  for (int i=0; i<20; i++)
-    hues[i] += scale16by8(sin16(phase+randPhase[i]),mag);
+  disperseHues(0,phase,mag);
 }
 
 // convert preset H values to RGB with SV
@@ -250,7 +260,7 @@ void huesToRGB(uint8_t sat, uint8_t val)
 
 void calcModes()
 {
-  swVal = 2;
+  swVal = 3;
   switch (swVal)
   {
     case 0:
@@ -267,9 +277,12 @@ void calcModes()
       // standard slow fade, minimal dispersion
       avgHue += m1_dHue;
       // add dispersion fade, faster than hue fade
-      dispVal += m1_dDisp;
+//      dispVal += m1_dDisp;
       // disperse the hues
-      disperseHues(avgHue, dispVal, m1_dispMag);
+//      disperseHues(avgHue, 0, m1_dispMag);
+      for (int i=0; i<20; i++)
+        hues[i] = avgHue+randPhase[i];
+        
       huesToRGB(255, m1_brt);
       
       TLC_setData(RGBs);
@@ -278,10 +291,11 @@ void calcModes()
     case 2:
     {
       // Fade rate modulated by power
-      uint16_t pwr = scale16by8(avgPower, m2_pwrScale);
+      uint16_t pwr = scale16(avgPower, m2_pwrScale);
       avgHue += pwr;
+
       // add dispersion fade, faster than hue fade
-      dispVal += 5*pwr;
+      dispVal += m2_dispScale*pwr;
 
       // disperse the hues
       disperseHues(avgHue, dispVal, m1_dispMag);
@@ -293,7 +307,8 @@ void calcModes()
     case 3:
     {
       // Jumping lights, from one region to another
-      uint16_t pwr = scale16by8(avgPower, m3_pwrScale);
+      uint16_t pwr = scale16(avgPower, m3_pwrScale);
+      pwr = m3_pwrScale*2;
       m3_fadeFac += pwr;
       // did we just wrap around?
       if (m3_fadeFac < pwr)
@@ -301,16 +316,23 @@ void calcModes()
         // cycle current and next onesies, and pick randomly
         m3_curTgt = m3_nextTgt;
         m3_curHue = m3_nextHue;
-        m3_nextTgt = random8(20);
-        m3_nextHue = random16();
+//        while (m3_nextTgt == m3_curTgt)
+          m3_nextTgt = m3_curTgt + 1;//random(20);
+          if (m3_nextTgt > 19) m3_nextTgt = 0;
+        m3_nextHue = random(65535);
         // also start at 0
         m3_fadeFac = 0;
       }
       // set all dem RGBs to 0, in case of previous thingies
       memset(RGBs,0,2*60);
       // now set jumping LEDs
-      HSVtoRGB(scale16(m3_curHue,360), 255, m3_fadeFac>>8, RGBs+3*m3_curTgt);
-      HSVtoRGB(scale16(m3_nextHue,360), 255, (-m3_fadeFac)>>8, RGBs+3*m3_nextTgt);
+      uint8_t ff = m3_fadeFac >> 8;
+      m3_curHue = m3_nextHue = 0;
+//      HSVtoRGB(scale16(m3_curHue,360), 255, 255-ff, RGBs+3*m3_curTgt);
+//      HSVtoRGB(scale16(m3_nextHue,360), 255, ff, RGBs+3*m3_nextTgt);
+//      HSVtoRGB(scale16(3000,360), 255, 255, RGBs+3*4);
+//      RGBs[14] = 65535;
+      RGBs[32] = 65535;
       
       TLC_setData(RGBs);
       break;
@@ -380,24 +402,6 @@ void loop()
   // can put lots of calculations here then, if you want
   calcModes();
   
-/*#ifdef SERIAL_EN
-  // check if we received bytes to set the color/brightness
-  if (Serial.available() > 2)
-  {
-    mode = 2;
-    // get all of the rgb values
-    rgb[0] = Serial.read();
-    rgb[1] = Serial.read();
-    rgb[2] = Serial.read();
-    // and scale them for gamma 2
-    for (int i=0; i<2; i++)
-      rgb[i] *= rgb[i];
-    // flush buffer
-    while (Serial.available() > 0)
-      Serial.read();
-  }
-#endif*/
-
   // and finally, write the newest data to the LED drivers
   // (takes about 1.5 ms)
   TLC_write();
@@ -405,7 +409,7 @@ void loop()
   // and total time taken
   uint32_t dt = micros() - tstart;
   // make up the rest of the time with a delay, if needed (?)
-  if (1000*loopTime > dt)
-    delayMicroseconds(1000*loopTime - dt);
-//  delay(50);
+//  if (1000*loopTime > dt)
+//    delayMicroseconds(1000*loopTime - dt);
+  delay(50);
 }

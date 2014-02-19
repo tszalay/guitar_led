@@ -100,7 +100,7 @@ void TLC_setAll(uint16_t R, uint16_t G, uint16_t B)
   {
     for (int j=0; j<4; j++)
     {
-      if (i>1 && i<4 && j<2)
+      if (i>0 && i<3 && j<2)
         continue;
         
       msg16[i*14 + 3*j + 2] = flipBytes(R >> TLC_dim);
@@ -123,7 +123,7 @@ void TLC_setData(uint16_t *data)
   {
     for (int j=0; j<4; j++)
     {
-      if (i>1 && i<4 && j<2)
+      if (i>0 && i<3 && j>1)
         continue;
         
       msg16[i*14 + 3*j + 2] = flipBytes(*data++ >> TLC_dim);

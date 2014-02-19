@@ -8,11 +8,11 @@ int lf = 10;    // Linefeed in ASCII
 
 // sensor data read from the arduino
 // order: 7x EQ, 1x selector, 3x accel, 1x distance
-int nSensors = 12;
+int nSensors = 13;
 float sensorVals[] = new float[nSensors];
 
 // buffered sensor values
-int nBuffered = 4;
+int nBuffered = 5;
 int bufLength = 500;
 float sensorBuffer[][] = new float[nBuffered][bufLength];
 
@@ -91,6 +91,9 @@ void drawSensors()
   // now draw distance sensor stream
   drawStreamBox(xstart,ystart,w,eqHeight,15);
   drawStream(sensorBuffer[3],xstart,ystart,w,eqHeight,color(255,255,0),false);
+  // and any extra sensors
+  drawStream(sensorBuffer[4],xstart,ystart,w,eqHeight,color(0,255,255),false);
+  
   
   // and finally draw the selector switch
   ystart += eqHeight + 20 + 20;
