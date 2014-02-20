@@ -209,8 +209,8 @@ void TLC_write()
     TLC_writeBit<0>(b,ll,lh,hl,hh);
   }
     
-  // end with clock low
-  TLC_PORT = ll;
+  // end with clock low and data high
+  TLC_PORT = hl;
   
   interrupts();
 }
