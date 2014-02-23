@@ -239,9 +239,9 @@ void disperseHues(uint16_t hue, uint16_t phase, uint8_t mag)
   {
     int16_t sval = sin16(phase+randPhase[i]);
     if (sval > 0)
-      hues[i] = hue + scale16(abs(sval),20000U);
+      hues[i] = hue + scale16(abs(sval),mag);
     else
-      hues[i] = hue - scale16(abs(sval),20000U);
+      hues[i] = hue - scale16(abs(sval),mag);
   }
 }
 
@@ -260,7 +260,7 @@ void huesToRGB(uint8_t sat, uint8_t val)
 
 void calcModes()
 {
-  swVal = 3;
+  swVal = 2;
   switch (swVal)
   {
     case 0:
@@ -298,7 +298,7 @@ void calcModes()
       dispVal += m2_dispScale*pwr;
 
       // disperse the hues
-      disperseHues(avgHue, dispVal, m1_dispMag);
+      disperseHues(avgHue, dispVal, 0);//m1_dispMag);
       huesToRGB(255, m1_brt);
 
       TLC_setData(RGBs);
@@ -411,5 +411,5 @@ void loop()
   // make up the rest of the time with a delay, if needed (?)
 //  if (1000*loopTime > dt)
 //    delayMicroseconds(1000*loopTime - dt);
-  delay(50);
+  delay(20);
 }
