@@ -36,10 +36,11 @@ byte TLC_header[4] =
 // how many devices do we have hooked up?
 #define TLC_NDEV  6
 
-// array of colors to send
-
 // contents of message we are sending
 byte TLC_msg[28*TLC_NDEV];
+
+// indices into the above for each LED
+uint16_t* LEDptr[16];
 
 // this is the number of bits to right-shift all brightness values
 // eg. to divide by 8, set to 3
@@ -80,6 +81,29 @@ void TLC_init(byte dimming)
     for (int j=0; j<4; j++)
       TLC_msg[i*28 + j] = TLC_header[j];
   }
+  
+  // and set the LED indices
+  uint16_t *msg16 = (uint16_t*)TLC_msg;
+  
+  // we are indexing as follows: center boards, kidney boards, bottom boards
+  for (int i=0; i<4; i++)
+  {
+    LEDptr[i] = msg16 + 0*14 + 3*i + 2;
+    LEDptr[i+4] = msg16 + 3*14 + 3*i + 2;
+  }
+  // kidney, 8 LEDs down
+  for (int i=0; i<2; i++)
+  {
+    LEDptr[i+8] = msg16 + 1*14 + 3*i + 2 + 6;
+    LEDptr[i+10] = msg16 + 2*14 + 3*i + 2 + 6;
+  }
+  
+  // bottom, 12 LEDs down
+  for (int i=0; i<2; i++)
+  {
+    LEDptr[i+12] = msg16 + 4*14 + 3*i + 2 + 3;
+    LEDptr[i+14] = msg16 + 5*14 + 3*i + 2 + 3;
+  }
 }
 
 void TLC_setAll(uint16_t R, uint16_t G, uint16_t B)
@@ -89,71 +113,38 @@ void TLC_setAll(uint16_t R, uint16_t G, uint16_t B)
   G = flipBytes(G >> TLC_dim);
   B = flipBytes(B >> TLC_dim);  
   
-  // we know that each chip has 4 RGB LEDs, except for the middle two (out of 6)
-  // this means there are 4*4 + 2*2 = 20 LEDs total
-
-  // write into a 16-bit array, for convenience  
-  uint16_t *msg16 = (uint16_t*)TLC_msg;
-  
-  // so set all of them, but skip a few
-  for (int i=0; i<6; i++)
+  // use lookup table to set everything
+  for (int i=0; i<16; i++)
   {
-    for (int j=0; j<4; j++)
-    {
-      if (i>0 && i<3 && j<2)
-        continue;
-        
-      msg16[i*14 + 3*j + 2] = R;
-      msg16[i*14 + 3*j + 3] = G;
-      msg16[i*14 + 3*j + 4] = B;
-    }
+    LEDptr[i][2] = R;
+    LEDptr[i][1] = G;
+    LEDptr[i][0] = B;
   }
 }
 
+// turn a single LED color on, indexed by 48 LEDs
 void TLC_singleLED(int ledIndex)
 {
   uint16_t val = 65535;
-
-  // we know that each chip has 4 RGB LEDs, except for the middle two (out of 6)
-  // this means there are 4*4 + 2*2 = 20 LEDs total
-
-  // write into a 16-bit array, for convenience  
-  uint16_t *msg16 = (uint16_t*)TLC_msg;
   
-  int curIndex = 0;
+  for (int i=0; i<16; i++)
+    for (int j=0; j<3; j++)
+      LEDptr[i][j] = 0;
+      
+  if (ledIndex >= 48) return;
   
-  // so set all of them, but skip a few
-  for (int i=0; i<6; i++)
-  {
-    for (int j=0; j<4; j++)
-    {
-      msg16[i*14 + 3*j + 4] = (curIndex++ == ledIndex)?val:0;
-      msg16[i*14 + 3*j + 3] = (curIndex++ == ledIndex)?val:0;
-      msg16[i*14 + 3*j + 2] = (curIndex++ == ledIndex)?val:0;
-    }
-  }
+  LEDptr[ledIndex/3][2-(ledIndex%3)] = val;
 }
 
+// takes array of 48 values, RGBRGBRGBetc
 void TLC_setData(uint16_t *data)
 {
-  // we know that each chip has 4 RGB LEDs, except for the middle two (out of 6)
-  // this means there are 4*4 + 2*2 = 20 LEDs total
-
-  // write into a 16-bit array, for convenience  
-  uint16_t *msg16 = (uint16_t*)TLC_msg;
-  
-  // so set all of them, but skip a few
-  for (int i=0; i<6; i++)
+  // use lookup table to set everything
+  for (int i=0; i<16; i++)
   {
-    for (int j=0; j<4; j++)
-    {
-      if (i>0 && i<3 && j>1)
-        continue;
-        
-      msg16[i*14 + 3*j + 2] = flipBytes(*data++ >> TLC_dim);
-      msg16[i*14 + 3*j + 3] = flipBytes(*data++ >> TLC_dim);
-      msg16[i*14 + 3*j + 4] = flipBytes(*data++ >> TLC_dim);
-    }
+    LEDptr[i][2] = flipBytes(*data++ >> TLC_dim);
+    LEDptr[i][1] = flipBytes(*data++ >> TLC_dim);;
+    LEDptr[i][0] = flipBytes(*data++ >> TLC_dim);;
   }
 }
 

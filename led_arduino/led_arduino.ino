@@ -18,8 +18,8 @@ void loop()
   TLC_singleLED(ledIndex++);
   TLC_write();
   
-  if (ledIndex >= 72) ledIndex = 0;
+  if (ledIndex >= 48) ledIndex = 0;
   
-  delay(1000);
+  delay(500);
 }
 
