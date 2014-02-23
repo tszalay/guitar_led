@@ -1,13 +1,10 @@
 #include "TLC_lib.h"
 #include "lib8tion.h"
+#include "mode_defs.h"
 
 #include <SPI.h>
 #include <ADXL362.h>
 
-// update period, in ms
-const uint16_t loopTime = 20;
-// and frequency
-const uint16_t loopFreq = 1000/loopTime;
 
 // ADXL values
 ADXL362 adxl;
@@ -48,33 +45,7 @@ const uint16_t pwrTau = 63000; // mixing fraction for averaging
 // everything is full-range unless stated otherwise
 
 // this is an array of random phases to use for dispersion
-//uint16_t* randPhase = new uint16_t[20];
-uint16_t randPhase[20];
-
-// here be parameters/magic numbers (for corresponding mode):
-const uint16_t m1_slowTime = 5;  // time to loop hue, in seconds
-const uint8_t  m1_dispMag  = 100;  // magnitude of dispersion, in 255ths (sorry!)
-const uint8_t  m1_brt      = 50;  // brightness of the mode
-const uint16_t m1_dHue = (65535/m1_slowTime/loopFreq); // amount to add each iteration, is about 21
-const uint16_t m1_dDisp    = 5*m1_dHue;  // rate at which dispersion changes
-
-const uint16_t m2_pwrScale  = 1200; // scaling for power
-const uint8_t  m2_dispScale = 2;    // how much faster dispersion changes than power
-
-const uint16_t m3_pwrScale = 1200;   // scaling for power to fade btwn LEDs
-uint8_t        m3_curTgt   = 0;     // which LED is fading
-uint8_t        m3_nextTgt  = 10;    // which LED is brightening
-uint16_t       m3_curHue   = 0;     // hue of current LED
-uint16_t       m3_nextHue  = 20000; // hue of next LED
-uint16_t       m3_fadeFac  = -1;    // fraction faded to next LED
-
-uint16_t       m4_bright   = 0;     // current brightness of flashing
-const uint16_t m4_decay    = 65000; // decay rate for flashy flash
-const uint16_t m4_thresh   = 10000; // minimum value for power to make brighty
-
-const uint16_t m5_hues[]   = {0, 5000, 10000, 15000, 20000};
-uint16_t       m5_dthresh  = 10000;
-
+uint16_t randPhase[16];
 
 
 // overall hue of the guitar. everybody must update, for smooth transitionssss
@@ -83,8 +54,8 @@ uint16_t avgHue    = 0;
 uint16_t dispVal   = 0;
 
 // temporary output vars for hues and RGB values of LEDs
-uint16_t hues[20];
-uint16_t RGBs[60];
+uint16_t hues[16];
+uint16_t RGBs[48];
 
 
 
@@ -103,7 +74,7 @@ void setup()
   adxl.checkAllControlRegs();     // Burst Read all Control Registers, to check for proper setup
 
   randomSeed(analogRead(4));
-  for (int i=0; i<20; i++)
+  for (int i=0; i<16; i++)
     randPhase[i] = random(65535);
     
   // initialize all non-instantaneous values
@@ -232,10 +203,10 @@ void sendSensors()
 
 
 // set and disperse all hues, by the given phase and magnitude (out of 255)
-void disperseHues(uint16_t hue, uint16_t phase, uint8_t mag)
+void disperseHues(uint16_t hue, uint16_t phase, uint16_t mag)
 {
   // assumes the hues array is populated, this modifies by disps
-  for (int i=0; i<20; i++)
+  for (int i=0; i<16; i++)
   {
     int16_t sval = sin16(phase+randPhase[i]);
     if (sval > 0)
@@ -254,21 +225,20 @@ void disperseHues(uint16_t phase, uint8_t mag)
 // convert preset H values to RGB with SV
 void huesToRGB(uint8_t sat, uint8_t val)
 {
-  for (int i=0; i<20; i++)
+  for (int i=0; i<16; i++)
     HSVtoRGB(scale16(hues[i],360), sat, val, RGBs+3*i);
 }
 
 void calcModes()
 {
-  swVal = 2;
+  swVal = 1;
   switch (swVal)
   {
     case 0:
     {
       // all LEDs off
-      for (int i=0; i<60; i++)
-        RGBs[i] = 0;
-        
+      memset(RGBs,0,2*48);
+      
       TLC_setAll(0,0,0);
       break;
     }
@@ -277,12 +247,10 @@ void calcModes()
       // standard slow fade, minimal dispersion
       avgHue += m1_dHue;
       // add dispersion fade, faster than hue fade
-//      dispVal += m1_dDisp;
+      dispVal += m1_dDisp;
       // disperse the hues
-//      disperseHues(avgHue, 0, m1_dispMag);
-      for (int i=0; i<20; i++)
-        hues[i] = avgHue+randPhase[i];
-        
+      disperseHues(avgHue, dispVal, m1_dispMag);
+      
       huesToRGB(255, m1_brt);
       
       TLC_setData(RGBs);
@@ -298,7 +266,7 @@ void calcModes()
       dispVal += m2_dispScale*pwr;
 
       // disperse the hues
-      disperseHues(avgHue, dispVal, 0);//m1_dispMag);
+      disperseHues(avgHue, dispVal, avgPower/2);
       huesToRGB(255, m1_brt);
 
       TLC_setData(RGBs);
@@ -308,7 +276,7 @@ void calcModes()
     {
       // Jumping lights, from one region to another
       uint16_t pwr = scale16(avgPower, m3_pwrScale);
-      pwr = m3_pwrScale*2;
+      pwr += m3_baseSpd;
       m3_fadeFac += pwr;
       // did we just wrap around?
       if (m3_fadeFac < pwr)
@@ -316,23 +284,19 @@ void calcModes()
         // cycle current and next onesies, and pick randomly
         m3_curTgt = m3_nextTgt;
         m3_curHue = m3_nextHue;
-//        while (m3_nextTgt == m3_curTgt)
-          m3_nextTgt = m3_curTgt + 1;//random(20);
-          if (m3_nextTgt > 19) m3_nextTgt = 0;
+        while (m3_nextTgt == m3_curTgt)
+          m3_nextTgt = random(16);
+
         m3_nextHue = random(65535);
         // also start at 0
         m3_fadeFac = 0;
       }
       // set all dem RGBs to 0, in case of previous thingies
-      memset(RGBs,0,2*60);
+      memset(RGBs,0,2*48);
       // now set jumping LEDs
       uint8_t ff = m3_fadeFac >> 8;
-      m3_curHue = m3_nextHue = 0;
-//      HSVtoRGB(scale16(m3_curHue,360), 255, 255-ff, RGBs+3*m3_curTgt);
-//      HSVtoRGB(scale16(m3_nextHue,360), 255, ff, RGBs+3*m3_nextTgt);
-//      HSVtoRGB(scale16(3000,360), 255, 255, RGBs+3*4);
-//      RGBs[14] = 65535;
-      RGBs[32] = 65535;
+      HSVtoRGB(scale16(m3_curHue,360), 255, 255-ff, RGBs+3*m3_curTgt);
+      HSVtoRGB(scale16(m3_nextHue,360), 255, ff, RGBs+3*m3_nextTgt);
       
       TLC_setData(RGBs);
       break;
