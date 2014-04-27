@@ -33,9 +33,9 @@ const uint16_t dbTime = 200; // ms to wait on new value
 // computed values
 uint16_t curPower;        // sum of EQ spectra, full range
 uint16_t avgPower;        // time-average (lowpass filter of previous)
-const uint16_t pwrTau = 63000; // mixing fraction for averaging
+const uint16_t pwrTau = 64000;  // mixing fraction for averaging, can be changed by modes
 
-// slow fading for mode switching
+// slow fading for mode switching?
 // gonna get here eventually
 
 
@@ -115,9 +115,13 @@ void readEQ()
     pwr += scale16(eqVals[i],65535/7);
   }
 
-  // update current and running avg  
+  // update current and running avg
+  // (running avg has fast rise/slow decay)
   curPower = pwr;
-  avgPower = scale16(avgPower,pwrTau)+scale16(curPower,65535-pwrTau);
+  if (curPower > avgPower)
+    avgPower = curPower;
+  else
+    avgPower = scale16(avgPower,pwrTau)+scale16(curPower,65535-pwrTau);
 }
 
 void readAccel()
@@ -286,10 +290,14 @@ void calcModes()
     case 4:
     {
       // Sound blaster! Flash white on big'n events
-      if (avgPower > m4_thresh)
-        m4_bright = avgPower;
-      else
-        m4_bright = scale16(avgPower, m4_decay);
+      // also program it to fade faster
+
+      // bump up if high
+      if (curPower > m4_thresh)
+        m4_bright = curPower;
+        
+      // and decay
+      m4_bright = scale16(m4_bright,m4_decay);
 
       // move dispersion along
       dispVal += m1_dDisp;

@@ -22,8 +22,8 @@ uint16_t       m3_nextHue  = 20000; // hue of next LED
 uint16_t       m3_fadeFac  = -1;    // fraction faded to next LED
 
 uint16_t       m4_bright   = 0;     // current brightness of flashing
-const uint16_t m4_decay    = 65000; // decay rate for flashy flash
-const uint16_t m4_thresh   = 10000; // minimum value for power to make brighty
+const uint16_t m4_decay    = 55000; // rate at which it decays
+const uint16_t m4_thresh   = 18000; // minimum value for power to make brighty
 
 const uint16_t m5_hues[]   = {0, 5000, 10000, 15000, 20000};
 uint16_t       m5_dthresh  = 10000;
