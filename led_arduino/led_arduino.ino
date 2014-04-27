@@ -23,7 +23,6 @@ const uint16_t EQ_MAX = 1023;
 // stored sensor vals, scaled as appropriate
 uint16_t eqVals[7];       // full range
 int16_t accelVals[3];     // full range
-uint16_t distVal = 0;     // full range
 uint16_t swVal = 0;       // 0...5
 
 // debouncing for the switch
@@ -60,7 +59,7 @@ uint16_t RGBs[48];
 
 
 // are we transmitting data over serial?
-#define SERIAL_EN 1
+#define SERIAL_EN 0
 
 
 void setup() 
@@ -129,7 +128,7 @@ void readAccel()
   // it's 12 bits, so multiply by the missing 4 bits = 16
   accelVals[0] = x*16;
   accelVals[1] = y*16;
-  accelVals[2] = t*16;
+  accelVals[2] = z*16;
 }
 
 void readSwitch()
@@ -162,26 +161,12 @@ void readSwitch()
   }
 }
 
-// read sharp distance sensor
-void readDistance()
-{
-  // val here is likely under 3.5V, or 716 (10-bit)
-  // add 1 to avoid divide by zero
-  // otherwise, sensor reports inverse distance
-  // this scaling gives a pretty good range
-  // and also keeps it from overflowing
-  uint32_t val = (65535*100)/(1+analogRead(A4));
-  if (val > 65535) val = 65535;
-  // scale to 0...65535
-  distVal = val;
-}
-
 // transmit sensor data, if we so desire
 void sendSensors()
 {
 #ifdef SERIAL_EN
   // transmit sensor data
-  // order is EQ, sel, accel, distance
+  // order is EQ, sel, accel, power
   for (int i=0; i<7; i++)
   {
     Serial.print(eqVals[i],DEC);
@@ -194,9 +179,7 @@ void sendSensors()
     Serial.print(accelVals[i],DEC);
     Serial.print(",");
   }
-  Serial.print(distVal,DEC);
   // now print power and other relevant vars
-  Serial.print(",");
   Serial.println(avgPower,DEC);
 #endif
 }
@@ -231,7 +214,6 @@ void huesToRGB(uint8_t sat, uint8_t val)
 
 void calcModes()
 {
-  swVal = 1;
   switch (swVal)
   {
     case 0:
@@ -329,13 +311,12 @@ void calcModes()
       
       // set hue based on distance and avg. power
       // interpolate and blah blah blah
-      uint16_t pwr = (distVal>>1) + (avgPower>>1);
+      uint16_t pwr = avgPower;
       uint8_t pind = pwr >> 14; // 0...3, use ind
       uint16_t hue = lerp16by16(m5_hues[pind], m5_hues[pind], pwr & ((1<<14)-1));
       // adjust intensity as well
       uint8_t brt = 0;
-      if (distVal > m5_dthresh)
-        brt = pwr >> 9 + 128;
+      brt = pwr >> 9 + 128;
   
       disperseHues(hue, dispVal, brt>>4);
       huesToRGB(255, brt);
@@ -358,7 +339,6 @@ void loop()
   readEQ();
   readAccel();
   readSwitch();
-  readDistance();
   
   // also takes 1 ms or something like that
   sendSensors();
