@@ -33,7 +33,8 @@ const uint16_t dbTime = 200; // ms to wait on new value
 // computed values
 uint16_t curPower;        // sum of EQ spectra, full range
 uint16_t avgPower;        // time-average (lowpass filter of previous)
-const uint16_t pwrTau = 64000;  // mixing fraction for averaging, can be changed by modes
+const uint16_t pwrRise = 63000;  // decay (averaging) rate for power going up
+const uint16_t pwrFall = 64000;  // decay rate for power going down
 
 // slow fading for mode switching?
 // gonna get here eventually
@@ -65,7 +66,7 @@ uint16_t RGBs[48];
 void setup() 
 {
   // initialize with specified dim scale (in this case, 1/8th power)
-  TLC_init(2);
+  TLC_init(0);
   
   // initalize axdl
   adxl.begin();                   // Setup SPI protocol, issue device soft reset
@@ -119,9 +120,9 @@ void readEQ()
   // (running avg has fast rise/slow decay)
   curPower = pwr;
   if (curPower > avgPower)
-    avgPower = curPower;
+    avgPower = scale16(avgPower,pwrRise)+scale16(curPower,65535-pwrRise);
   else
-    avgPower = scale16(avgPower,pwrTau)+scale16(curPower,65535-pwrTau);
+    avgPower = scale16(avgPower,pwrFall)+scale16(curPower,65535-pwrFall);
 }
 
 void readAccel()
