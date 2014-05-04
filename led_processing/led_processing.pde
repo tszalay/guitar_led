@@ -12,7 +12,7 @@ int nSensors = 13;
 float sensorVals[] = new float[nSensors];
 
 // buffered sensor values
-int nBuffered = 4;
+int nBuffered = 5;
 int bufLength = 500;
 float sensorBuffer[][] = new float[nBuffered][bufLength];
 
@@ -88,9 +88,10 @@ void drawSensors()
   // shift again
   ystart += eqHeight + 20;
   
-  // now draw calculated power stream
+  // now draw remaining streams
   drawStreamBox(xstart,ystart,w,eqHeight,15);
-  drawStream(sensorBuffer[3],xstart,ystart,w,eqHeight,color(255,255,0),false);  
+  for (int i=3; i<nBuffered; i++)
+    drawStream(sensorBuffer[i],xstart,ystart,w,eqHeight,color(70*i,255-(70*i),0),false);  
   
   // and finally draw the selector switch
   ystart += eqHeight + 20 + 20;

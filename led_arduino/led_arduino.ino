@@ -17,7 +17,7 @@ const int EQ_STROBE = 7;
 
 // min and max values for the analong MSGEQ input
 // to make input data be full range
-const uint16_t EQ_MIN = 80;
+const uint16_t EQ_MIN = 82;
 const uint16_t EQ_MAX = 1023;
 
 // stored sensor vals, scaled as appropriate
@@ -35,10 +35,6 @@ uint16_t curPower;        // sum of EQ spectra, full range
 uint16_t avgPower;        // time-average (lowpass filter of previous)
 const uint16_t pwrRise = 63000;  // decay (averaging) rate for power going up
 const uint16_t pwrFall = 64000;  // decay rate for power going down
-
-// slow fading for mode switching?
-// gonna get here eventually
-
 
 
 // computed counters and whatnot
@@ -83,6 +79,9 @@ void setup()
 #ifdef SERIAL_EN
   Serial.begin(115200);
 #endif
+
+  for (int i=0; i<7; i++)
+    eqVals[i] = 0;
   
   // pulse reset pin of MSGEQ7 to initialize
   pinMode(EQ_RST, OUTPUT);
@@ -106,6 +105,9 @@ void readEQ()
     delayMicroseconds(50);
     digitalWrite(EQ_STROBE, LOW);
     delayMicroseconds(50);
+    // don't read the last one, it's dumb
+    if (i==6)
+      break;
     // get the 10-bit raw analog value
     uint16_t val = analogRead(A0);
     // clamp and subtract
@@ -115,6 +117,12 @@ void readEQ()
     // and add value to current power
     pwr += scale16(eqVals[i],65535/7);
   }
+  
+  digitalWrite(EQ_RST, HIGH);
+  delayMicroseconds(50);
+  digitalWrite(EQ_RST, LOW);
+  delayMicroseconds(50);
+
 
   // update current and running avg
   // (running avg has fast rise/slow decay)
@@ -185,7 +193,10 @@ void sendSensors()
     Serial.print(",");
   }
   // now print power and other relevant vars
-  Serial.println(avgPower,DEC);
+  Serial.print(avgPower,DEC);
+  Serial.print(",");
+  Serial.print(curPower,DEC);
+  Serial.print("\n");
 #endif
 }
 
@@ -293,13 +304,42 @@ void calcModes()
       // Sound blaster! Flash white on big'n events
       // also program it to fade faster
 
-      // bump up if high
-      if (curPower > m4_thresh)
-        m4_bright = curPower;
-        
-      // and decay
-      m4_bright = scale16(m4_bright,m4_decay);
-
+      switch (m4_state)
+      {
+        case 0:
+          // is dark. check for to make lighter be
+          if (curPower > m4_ton)
+          {
+            m4_bright = 65535;
+            m4_wub = 32768;
+            m4_state = 1;
+          }
+          else
+          {
+            m4_bright = scale16(m4_bright,m4_decay);
+          }
+          break;
+        case 1:
+          // slow fade, make the wub
+          if (curPower < m4_toff)
+          {
+            // switch to quick decay
+            m4_state = 0;
+          }
+          else
+          {
+            m4_wub += m4_wubstep;
+            // get cosine of wub fading value
+            uint16_t val = cos16(m4_wub);
+            // shift it by half, to go up and down, and scale down by 1/2
+            val += 32767;
+            val = 3*(val>>2);
+            // and set the brightness
+            m4_bright = 65535-val;
+          }
+          break;
+      }
+      
       // move dispersion along
       dispVal += m1_dDisp;
       
@@ -307,7 +347,7 @@ void calcModes()
       disperseHues(0, dispVal, 255);
       
       // but when we set the RGBs we use the sat
-      huesToRGB(127-(m4_bright >> 9), m4_bright >> 8);
+      huesToRGB(0, m4_bright >> 8);
 
       TLC_setData(RGBs);
       break;
@@ -318,17 +358,35 @@ void calcModes()
       
       dispVal += m1_dDisp;
       
+      // calculate a "heat", as the center-of-maass point of the total power
+      uint32_t heat = 0;
+      for (int i=0; i<7; i++)
+        heat += (65535/49)*i*eqVals[i];
+      
+      // make this be 0...65535 now
+      heat = heat/curPower;
+      heat = constrain(heat,m5_heatmin,m5_heatmax)-m5_heatmin;
+      uint16_t h16 = (heat<<16)/(100+m5_heatmax-m5_heatmin);
+      if (curPower < m5_pthresh)
+        h16 = 0;
+      
       // set hue based on distance and avg. power
       // interpolate and blah blah blah
       uint16_t pwr = avgPower;
+      if (pwr > 8191) pwr = 8191;
+      pwr = pwr << 3;
+      pwr = scale16(pwr,h16);
+      m5_heat = scale16(m5_heat,m5_decay) + scale16(pwr,65535-m5_decay);
+      pwr = m5_heat;
+      
       uint8_t pind = pwr >> 14; // 0...3, use ind
-      uint16_t hue = lerp16by16(m5_hues[pind], m5_hues[pind], pwr & ((1<<14)-1));
+      uint16_t hue = lerp16by16(m5_hues[pind], m5_hues[pind+1], (pwr & ((1<<14)-1))<<2);
       // adjust intensity as well
       uint8_t brt = 0;
       brt = pwr >> 9 + 128;
   
-      disperseHues(hue, dispVal, brt>>4);
-      huesToRGB(255, brt);
+      disperseHues(hue, dispVal, 0);
+      huesToRGB(255, 128);
       
       TLC_setData(RGBs);
       break;
