@@ -11,9 +11,8 @@ ADXL362 adxl;
 
 
 // digital pins for MSGEQ7 chip
-// analog in is on A0
-const int EQ_RST    = 6;
-const int EQ_STROBE = 7;
+const int EQ_RST    = 7;
+const int EQ_STROBE = 8;
 
 // min and max values for the analong MSGEQ input
 // to make input data be full range
@@ -86,7 +85,7 @@ void setup()
   // pulse reset pin of MSGEQ7 to initialize
   pinMode(EQ_RST, OUTPUT);
   pinMode(EQ_STROBE, OUTPUT);
-  pinMode(A0, INPUT);
+  pinMode(A3, INPUT);
   digitalWrite(EQ_RST, HIGH);
   delay(50);
   digitalWrite(EQ_RST, LOW);
@@ -109,7 +108,7 @@ void readEQ()
     if (i==6)
       break;
     // get the 10-bit raw analog value
-    uint16_t val = analogRead(A0);
+    uint16_t val = analogRead(A3);
     // clamp and subtract
     val = constrain(val,EQ_MIN,EQ_MAX) - EQ_MIN;
     // rescale to full 16-bit range
