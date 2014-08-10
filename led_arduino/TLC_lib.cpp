@@ -30,7 +30,7 @@ byte TLC_header[4] =
 // definitions for data, clock pins
 // and their port
 #define TLC_DAT   2
-#define TLC_CLK   4
+#define TLC_CLK   5
 #define TLC_PORT  PORTD
 
 // how many devices do we have hooked up?

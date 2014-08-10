@@ -60,7 +60,7 @@ uint16_t RGBs[48];
 
 void setup() 
 {
-  // initialize with specified dim scale (in this case, 1/8th power)
+  // initialize with specified dim scale (0 is full power)
   TLC_init(0);
   
   // initalize axdl
@@ -74,6 +74,10 @@ void setup()
     
   // initialize all non-instantaneous values
   avgPower = 0;
+  
+  // set the mode
+  readSwitch();
+  swVal = newSwVal;
       
 #ifdef SERIAL_EN
   Serial.begin(115200);
@@ -87,9 +91,9 @@ void setup()
   pinMode(EQ_STROBE, OUTPUT);
   pinMode(A3, INPUT);
   digitalWrite(EQ_RST, HIGH);
-  delay(50);
+  delay(5);
   digitalWrite(EQ_RST, LOW);
-  delay(50);
+  delay(5);
 }
 
 // get EQ vals from MSGEQ7
@@ -234,9 +238,10 @@ void calcModes()
     case 0:
     {
       // all LEDs off
-      memset(RGBs,0,2*48);
+      //memset(RGBs,0,2*48);
       
-      TLC_setAll(0,0,0);
+      //TLC_setAll(0,0,0);
+      TLC_setAll(0xFFFFU,0xFFFFU,0xFFFFU);
       break;
     }
     case 1:
