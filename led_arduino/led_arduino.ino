@@ -9,6 +9,13 @@
 // ADXL values
 ADXL362 adxl;
 
+// vertical orientation for accelerometer
+int16_t accMid_X = -15750;
+int16_t accMid_Y = 5100;
+int16_t accMid_Z = 3750;
+
+const int hitThresh = 8000;
+
 
 // digital pins for MSGEQ7 chip
 const int EQ_RST    = 7;
@@ -138,13 +145,21 @@ void readEQ()
 
 void readAccel()
 {
-  int x,y,z,t;
+  int16_t x,y,z,t;
   // read all three axis in burst to ensure all measurements correspond to same sample time
   adxl.readXYZTData(x, y, z, t);
   // it's 12 bits, so multiply by the missing 4 bits = 16
-  accelVals[0] = x*16;
-  accelVals[1] = y*16;
-  accelVals[2] = z*16;
+  x *= 16;
+  y *= 16;
+  z *= 16;
+  // test for sudden hit
+  if (abs(x-accelVals[0]) > hitThresh || abs(y-accelVals[1]) > hitThresh || abs(z-accelVals[2]) > hitThresh)
+  {
+    avgPower = 65535;
+  }
+  accelVals[0] = x;
+  accelVals[1] = y;
+  accelVals[2] = z;
 }
 
 void readSwitch()
