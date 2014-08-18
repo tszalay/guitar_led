@@ -37,10 +37,13 @@ uint16_t newSwTime    = 0;
 const uint16_t dbTime = 200; // ms to wait on new value
 
 // computed values
-uint16_t curPower;        // sum of EQ spectra, full range
-uint16_t avgPower;        // time-average (lowpass filter of previous)
-const uint16_t pwrRise = 63000;  // decay (averaging) rate for power going up
-const uint16_t pwrFall = 64000;  // decay rate for power going down
+uint16_t curPower;                 // sum of EQ spectra, full range
+uint16_t avgPower;                 // time-average (lowpass filter of previous)
+const uint8_t numPrevPower = 4;
+uint16_t prevPower[numPrevPower];  // previous _average_ power values (for peak finding)
+uint8_t  prevPowerInd=0;           // index into rotating buffer for above
+const uint16_t pwrRise = 63000;    // decay (averaging) rate for power going up
+const uint16_t pwrFall = 64000;    // decay rate for power going down
 
 
 // computed counters and whatnot
@@ -81,6 +84,9 @@ void setup()
     
   // initialize all non-instantaneous values
   avgPower = 0;
+  
+  for (int i=0; i<numPrevPower; i++)
+    prevPower[i] = 0;
   
   // set the mode
   readSwitch();
@@ -141,6 +147,9 @@ void readEQ()
     avgPower = scale16(avgPower,pwrRise)+scale16(curPower,65535-pwrRise);
   else
     avgPower = scale16(avgPower,pwrFall)+scale16(curPower,65535-pwrFall);
+  // and save into rotating buffer
+  prevPowerInd = (prevPowerInd+1)&(numPrevPower-1);
+  prevPower[prevPowerInd] = curPower;
 }
 
 void readAccel()
@@ -321,54 +330,36 @@ void calcModes()
     case 4:
     {
       // Sound blaster! Flash white on big'n events
-      // also program it to fade faster
+      
+      uint16_t pwr = curPower;
+      if (pwr < m4_toff)
+        pwr = 0;
+        
+      if (pwr > m4_power)
+        m4_power = scale16(m4_power,pwrRise)+scale16(pwr,65535-pwrRise);
+      else
+        m4_power = scale16(m4_power,m4_decay)+scale16(pwr,65535-m4_decay);
+            
+      // Check for a rapid change in current power
+      uint8_t iprev = prevPowerInd;
+      uint8_t iprev2 = (prevPowerInd-2)&(numPrevPower-1);
 
-      switch (m4_state)
+      // jump up, regardless of where we are, if we have a sudden spike in power      
+      if (prevPower[iprev] > prevPower[iprev2] && prevPower[iprev] > prevPower[iprev2] + m4_ton)
       {
-        case 0:
-          // is dark. check for to make lighter be
-          if (curPower > m4_ton)
-          {
-            m4_bright = 65535;
-            m4_wub = 32768;
-            m4_state = 1;
-          }
-          else
-          {
-            m4_bright = scale16(m4_bright,m4_decay);
-          }
-          break;
-        case 1:
-          // slow fade, make the wub
-          if (curPower < m4_toff)
-          {
-            // switch to quick decay
-            m4_state = 0;
-          }
-          else
-          {
-            m4_wub += m4_wubstep;
-            // get cosine of wub fading value
-            uint16_t val = cos16(m4_wub);
-            // shift it by half, to go up and down, and scale down by 1/2
-            val += 32767;
-            val = 3*(val>>2);
-            // and set the brightness
-            m4_bright = 65535-val;
-          }
-          break;
+        m4_wub = 32768;
+        m4_power = 65535;
       }
-      
-      // move dispersion along
-      dispVal += m1_dDisp;
-      
-      // run the full gamut of hues for this dispersion
-      disperseHues(0, dispVal, 255);
-      
-      // but when we set the RGBs we use the sat
-      huesToRGB(0, m4_bright >> 8);
 
-      TLC_setData(RGBs);
+      m4_wub += m4_wubstep;
+      // get cosine of wub fading value
+      uint16_t val = cos16(m4_wub);
+      // shift it by half, to go up and down, and scale down by 1/2
+      val += 32767;
+      val = 3*scale16(65535-val,m4_power>>2)+(m4_power>>2);
+      val = scale16(val,val);
+      TLC_setAll(val,val,val);
+
       break;
     }
     case 5:

@@ -21,12 +21,11 @@ uint16_t       m3_curHue   = 0;          // hue of current LED
 uint16_t       m3_nextHue  = 20000;      // hue of next LED
 uint16_t       m3_fadeFac  = -1;         // fraction faded to next LED
 
-uint16_t       m4_bright   = 0;          // current brightness of flashing
+uint16_t       m4_power    = 0;          // our own time-averaged power, using m4_decay
 uint16_t       m4_wub      = 0;          // low-frequency pulsing
 uint16_t       m4_wubstep  = 800;        // step increment for above
-uint8_t        m4_state    = 0;          // state n stuff. 0=dark/fade, 1=wub
-const uint16_t m4_decay    = 58000;      // rate at which it decays
-const uint16_t m4_ton      = 30000;      // turn-on threshold
+const uint16_t m4_decay    = 50000;      // rate at which it decays
+const uint16_t m4_ton      = 10000;      // turn-on threshold, change in power over last two samples
 const uint16_t m4_toff     = 2000;       // quick decay/turn-off threshold
 
 const uint16_t m5_hues[]   = {0, 5000, 10000, 15000, 20000};
